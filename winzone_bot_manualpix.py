@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # winzone_bot_manualpix.py
-# WinZoneVipBot3 - versão compatível com Render e python-telegram-bot 20.x
+# WinZoneVipBot3 - versão para Render (com servidor Flask embutido)
 
 import os
 import logging
@@ -17,7 +17,6 @@ from telegram.ext import (
 from utils.messages import MOTIVATIONAL_MESSAGES, CLOSING_MESSAGE, NIGHT_PRELIST_MESSAGE
 from apscheduler.schedulers.background import BackgroundScheduler
 import holidays
-import asyncio
 
 # ----------------------------
 # CONFIG
@@ -136,29 +135,28 @@ def job_end_of_list(app_context):
     conn = app_context['db']
     if not lista_postada_hoje(conn):
         return
-    asyncio.create_task(send_channel_text(app, CLOSING_MESSAGE))
+    app.create_task(send_channel_text(app, CLOSING_MESSAGE))
 
 def job_night_prelist(app_context):
     app = app_context['app']
     today = datetime.now().date()
     if not is_business_day(today):
         return
-    asyncio.create_task(send_channel_text(app, NIGHT_PRELIST_MESSAGE))
+    app.create_task(send_channel_text(app, NIGHT_PRELIST_MESSAGE))
 
 def start_scheduler(app, conn):
     ctx = {'app': app, 'db': conn}
     scheduler.add_job(job_end_of_list, 'cron', hour=16, minute=5, args=[ctx])
     scheduler.add_job(job_night_prelist, 'cron', hour=22, minute=45, args=[ctx])
-
     motivational_times = [(6,0), (8,0), (12,0), (16,0), (18,0), (21,0), (22,0)]
-    for h, m in motivational_times:
+    for h,m in motivational_times:
         def make_job(msg):
             def job(app_context):
                 app = app_context['app']
                 today = datetime.now().date()
                 if not is_business_day(today):
                     return
-                asyncio.create_task(send_channel_text(app, msg))
+                app.create_task(send_channel_text(app, msg))
             return job
         for idx, msg in enumerate(MOTIVATIONAL_MESSAGES):
             scheduler.add_job(make_job(MOTIVATIONAL_MESSAGES[idx % len(MOTIVATIONAL_MESSAGES)]),
@@ -181,7 +179,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Disciplina e consistência constroem resultados 💪"
     )
     await update.message.reply_text(texto, parse_mode="Markdown")
-    logging.info(f"Usuário {user.username} ({user.id}) iniciou conversa.")
 
 async def painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
@@ -255,8 +252,7 @@ async def lista_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Nada de ganância. Consistência vence impulso.\n\n"
         "📅 As listas são postadas até as 23:00 e devem ser usadas no dia seguinte.\n"
         "📈 Operamos somente em mercado aberto — nada de OTC.\n"
-        "🕒 As listas contêm sinais entre 00:00 e 16:00.\n"
-        "🚫 Não há listas em fins de semana ou feriados de mercado.\n"
+        "🕒 As listas contêm sinais entre 00:00 e 16:00 (somente os horários mais assertivos).\n"
         "━━━━━━━━━━━━━━━\n"
         "💹 *WinZone | Sala de Sinais VIP 🚀*"
     )
@@ -285,9 +281,6 @@ async def resposta_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ Publicação cancelada.")
         context.user_data.pop("preview")
 
-# ----------------------------
-# Admin: confirmar pagamento
-# ----------------------------
 async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
         await update.message.reply_text("Acesso negado.")
@@ -312,11 +305,8 @@ async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE
     registrar_assinante(conn, user_id, "", "")
     await update.message.reply_text(f"✅ Pagamento confirmado e acesso liberado para {user_id}.")
 
-# ----------------------------
-# Comandos úteis
-# ----------------------------
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Bot online e funcional no Render!")
+    await update.message.reply_text("Bot online. WinZoneVipBot ativo.")
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -330,16 +320,14 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto)
 
 # ----------------------------
-# MAIN (compatível com Telegram 20.x)
+# MAIN
 # ----------------------------
-async def run_bot():
+async def main():
     print("🚀 Iniciando WinZoneVipBot3...")
-
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     conn = init_db()
     app.bot_data["db"] = conn
 
-    # handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("painel", painel))
     app.add_handler(CommandHandler("lista", lista_cmd))
@@ -349,17 +337,27 @@ async def run_bot():
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receber_comprovante))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resposta_publicacao))
 
-    # scheduler
     start_scheduler(app, conn)
+    print("✅ Bot rodando. Aguardando comandos...")
+    await app.run_polling()
 
-    print("✅ Bot rodando e aguardando comandos no Render...")
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.idle()
-
+# ----------------------------
+# FLASK KEEP-ALIVE
+# ----------------------------
 if __name__ == "__main__":
-    try:
-        asyncio.run(run_bot())
-    except (KeyboardInterrupt, SystemExit):
-        print("🛑 Bot finalizado.")
+    import asyncio
+    from threading import Thread
+    from flask import Flask
+
+    app_web = Flask(__name__)
+
+    @app_web.route('/')
+    def home():
+        return "✅ WinZoneVipBot3 ativo e rodando!"
+
+    def run_flask():
+        port = int(os.getenv("PORT", 10000))
+        app_web.run(host="0.0.0.0", port=port)
+
+    Thread(target=run_flask).start()
+    asyncio.run(main())
