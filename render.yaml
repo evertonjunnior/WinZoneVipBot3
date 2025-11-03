@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: winzonevipbot3
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python winzone_bot_manualpix.py"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: CHANNEL_ID
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: PIX_KEY
+        sync: false
