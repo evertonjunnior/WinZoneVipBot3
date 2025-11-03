@@ -342,7 +342,7 @@ async def main():
     await app.run_polling()
 
 # ----------------------------
-# FLASK KEEP-ALIVE (corrigido)
+# FLASK KEEP-ALIVE (versão corrigida e estável)
 # ----------------------------
 if __name__ == "__main__":
     import asyncio
@@ -359,13 +359,25 @@ if __name__ == "__main__":
         port = int(os.getenv("PORT", 10000))
         app_web.run(host="0.0.0.0", port=port)
 
-    # Flask em thread separada
+    # Executa o Flask em paralelo
     threading.Thread(target=run_flask, daemon=True).start()
 
-    # Executa o bot no mesmo loop de forma segura
+    print("🚀 Iniciando WinZoneVipBot3...")
+
+    # Executa o bot em um loop isolado
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            print("⚠️ Loop já em execução. Criando novo event loop...")
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            new_loop.run_until_complete(main())
+        else:
+            loop.run_until_complete(main())
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(main())
+        print("⚙️ Criando loop assíncrono manualmente...")
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        new_loop.run_until_complete(main())
+    except Exception as e:
+        print(f"❌ Erro ao iniciar bot: {e}")
