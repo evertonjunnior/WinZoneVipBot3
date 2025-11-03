@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # winzone_bot_manualpix.py
-# WinZoneVipBot3 - versão Render (com Flask Keep Alive)
+# WinZoneVipBot3 — versão Render estável (Flask + Telegram Bot 20.x + APScheduler)
 
 import os
 import logging
@@ -18,6 +18,7 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.background import BackgroundScheduler
 import holidays
+import asyncio
 
 # ----------------------------
 # CONFIGURAÇÕES
@@ -175,9 +176,9 @@ async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"✅ Pagamento confirmado e acesso liberado para {user_id}.")
 
 # ----------------------------
-# MAIN
+# FUNÇÃO PRINCIPAL DO BOT
 # ----------------------------
-async def main():
+async def iniciar_bot():
     print("🚀 Iniciando WinZoneVipBot3...")
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     conn = init_db()
@@ -188,30 +189,27 @@ async def main():
     app.add_handler(CommandHandler("confirm", confirmar_pagamento))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receber_comprovante))
 
-    print("✅ Bot rodando. Aguardando comandos...")
-    await app.run_polling()
+    await app.run_polling(close_loop=False)
 
 # ----------------------------
 # FLASK KEEP-ALIVE (Render)
 # ----------------------------
-if __name__ == "__main__":
-    import asyncio
-
+def iniciar_flask():
     app_web = Flask(__name__)
 
     @app_web.route('/')
     def home():
         return "✅ WinZoneVipBot3 ativo e rodando!"
 
-    def run_flask():
-        port = int(os.getenv("PORT", 10000))
-        app_web.run(host="0.0.0.0", port=port)
+    port = int(os.getenv("PORT", 10000))
+    app_web.run(host="0.0.0.0", port=port)
 
-    threading.Thread(target=run_flask, daemon=True).start()
+# ----------------------------
+# EXECUÇÃO PRINCIPAL
+# ----------------------------
+if __name__ == "__main__":
+    # Executa o Flask em uma thread separada
+    threading.Thread(target=iniciar_flask, daemon=True).start()
 
-    try:
-        asyncio.run(main())
-    except RuntimeError:
-        loop = asyncio.get_event_loop()
-        loop.create_task(main())
-        loop.run_forever()
+    # Executa o bot de forma assíncrona
+    asyncio.run(iniciar_bot())
