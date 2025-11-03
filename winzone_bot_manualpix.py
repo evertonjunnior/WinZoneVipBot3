@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # winzone_bot_manualpix.py
-# WinZoneVipBot3 - versão para Render (arquivo principal)
+# WinZoneVipBot3 - versão compatível com Render e python-telegram-bot 20.x
 
 import os
 import logging
@@ -17,6 +17,7 @@ from telegram.ext import (
 from utils.messages import MOTIVATIONAL_MESSAGES, CLOSING_MESSAGE, NIGHT_PRELIST_MESSAGE
 from apscheduler.schedulers.background import BackgroundScheduler
 import holidays
+import asyncio
 
 # ----------------------------
 # CONFIG
@@ -135,35 +136,31 @@ def job_end_of_list(app_context):
     conn = app_context['db']
     if not lista_postada_hoje(conn):
         return
-    # send closing
-    future = app.create_task(send_channel_text(app, CLOSING_MESSAGE))
+    asyncio.create_task(send_channel_text(app, CLOSING_MESSAGE))
 
 def job_night_prelist(app_context):
     app = app_context['app']
     today = datetime.now().date()
     if not is_business_day(today):
         return
-    future = app.create_task(send_channel_text(app, NIGHT_PRELIST_MESSAGE))
+    asyncio.create_task(send_channel_text(app, NIGHT_PRELIST_MESSAGE))
 
 def start_scheduler(app, conn):
     ctx = {'app': app, 'db': conn}
-    # 16:05 - encerramento (após o horário limite 16:00)
     scheduler.add_job(job_end_of_list, 'cron', hour=16, minute=5, args=[ctx])
-    # 22:45 - aviso da nova lista
     scheduler.add_job(job_night_prelist, 'cron', hour=22, minute=45, args=[ctx])
-    # mensagens motivacionais - horários escalados
+
     motivational_times = [(6,0), (8,0), (12,0), (16,0), (18,0), (21,0), (22,0)]
-    for h,m in motivational_times:
+    for h, m in motivational_times:
         def make_job(msg):
             def job(app_context):
                 app = app_context['app']
                 today = datetime.now().date()
                 if not is_business_day(today):
                     return
-                app.create_task(send_channel_text(app, msg))
+                asyncio.create_task(send_channel_text(app, msg))
             return job
         for idx, msg in enumerate(MOTIVATIONAL_MESSAGES):
-            # schedule each message at specified time rotating messages if needed
             scheduler.add_job(make_job(MOTIVATIONAL_MESSAGES[idx % len(MOTIVATIONAL_MESSAGES)]),
                               'cron', hour=h, minute=m, args=[{'app': app, 'db': conn}])
     scheduler.start()
@@ -215,14 +212,12 @@ async def painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="Markdown")
 
 async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # aceita imagens e documentos como comprovante
     if not (update.message.photo or update.message.document):
         await update.message.reply_text("Envie uma foto ou PDF do comprovante.")
         return
     user = update.effective_user
     conn = context.bot_data["db"]
     cur = conn.cursor()
-    # salva registro de pagamento (status PENDENTE)
     cur.execute("INSERT INTO pagamentos (user_id, valor, data, comprovante, status) VALUES (?, ?, ?, ?, ?)",
                 (user.id, 30.0, datetime.now().isoformat(), "comprovante_enviado", "PENDENTE"))
     conn.commit()
@@ -233,13 +228,11 @@ async def lista_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user.id != OWNER_ID:
         await update.message.reply_text("Apenas o administrador pode enviar listas.")
         return
-    # mensagem completa como texto (pode colar várias linhas)
     if not update.message.text:
         await update.message.reply_text("Cole a lista no corpo da mensagem (uma linha por sinal).")
         return
     raw = update.message.text.strip()
     linhas = [l.strip() for l in raw.splitlines() if l.strip()]
-    # detecta timeframe do primeiro item
     tf = "M15"
     if linhas and ";" in linhas[0]:
         try:
@@ -262,13 +255,12 @@ async def lista_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Nada de ganância. Consistência vence impulso.\n\n"
         "📅 As listas são postadas até as 23:00 e devem ser usadas no dia seguinte.\n"
         "📈 Operamos somente em mercado aberto — nada de OTC.\n"
-        "🕒 As listas contêm sinais entre 00:00 e 16:00 (somente os horários mais assertivos).\n"
-        "🚫 Não há listas em sábados, domingos e feriados que alterem o funcionamento do mercado.\n"
+        "🕒 As listas contêm sinais entre 00:00 e 16:00.\n"
+        "🚫 Não há listas em fins de semana ou feriados de mercado.\n"
         "━━━━━━━━━━━━━━━\n"
         "💹 *WinZone | Sala de Sinais VIP 🚀*"
     )
     mensagem_preview = header + body + rodape
-    # salva preview no user_data para confirmação
     context.user_data["preview"] = mensagem_preview
     await update.message.reply_text("🔎 Prévia da lista gerada. Responda com 'sim' para publicar ou 'não' para cancelar.")
     await update.message.reply_text(mensagem_preview, parse_mode="Markdown")
@@ -284,7 +276,6 @@ async def resposta_publicacao(update: Update, context: ContextTypes.DEFAULT_TYPE
         msg_final = context.user_data["preview"]
         await context.bot.send_message(chat_id=CHANNEL_ID, text=msg_final, parse_mode="Markdown")
         marcar_lista_postada(conn)
-        # salva a lista no DB
         cur = conn.cursor()
         cur.execute("INSERT INTO listas (data, conteudo) VALUES (?, ?)", (datetime.now().isoformat(), msg_final))
         conn.commit()
@@ -301,7 +292,6 @@ async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.effective_user.id != OWNER_ID:
         await update.message.reply_text("Acesso negado.")
         return
-    # comando: /confirm <user_id>
     if not context.args:
         await update.message.reply_text("Use: /confirm <user_id>")
         return
@@ -317,19 +307,16 @@ async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not row:
         await update.message.reply_text("Nenhum pagamento pendente para esse usuário.")
         return
-    # marca como confirmado
     cur.execute("UPDATE pagamentos SET status = 'CONFIRMADO' WHERE user_id = ?", (user_id,))
     conn.commit()
-    # registra assinante
     registrar_assinante(conn, user_id, "", "")
-    # gera link de convite (link de convite do canal deve ser criado manualmente no Telegram e colado aqui)
     await update.message.reply_text(f"✅ Pagamento confirmado e acesso liberado para {user_id}.")
 
 # ----------------------------
 # Comandos úteis
 # ----------------------------
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Bot online. WinZoneVipBot ativo.")
+    await update.message.reply_text("✅ Bot online e funcional no Render!")
 
 async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
@@ -343,10 +330,11 @@ async def ajuda(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(texto)
 
 # ----------------------------
-# MAIN
+# MAIN (compatível com Telegram 20.x)
 # ----------------------------
-async def main():
+async def run_bot():
     print("🚀 Iniciando WinZoneVipBot3...")
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     conn = init_db()
     app.bot_data["db"] = conn
@@ -361,12 +349,17 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receber_comprovante))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, resposta_publicacao))
 
-    # start scheduler
+    # scheduler
     start_scheduler(app, conn)
 
-    print("✅ Bot rodando. Aguardando comandos...")
-    await app.run_polling()
+    print("✅ Bot rodando e aguardando comandos no Render...")
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    try:
+        asyncio.run(run_bot())
+    except (KeyboardInterrupt, SystemExit):
+        print("🛑 Bot finalizado.")
