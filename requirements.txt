@@ -1,6 +1,5 @@
 python-telegram-bot==20.6
 APScheduler==3.10.1
-httpx==0.24.1
 asyncio==3.4.3
 holidays==0.27
 python-dateutil==2.9.0.post0
