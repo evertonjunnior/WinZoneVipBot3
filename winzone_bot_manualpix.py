@@ -342,11 +342,11 @@ async def main():
     await app.run_polling()
 
 # ----------------------------
-# FLASK KEEP-ALIVE
+# FLASK KEEP-ALIVE (corrigido)
 # ----------------------------
 if __name__ == "__main__":
     import asyncio
-    from threading import Thread
+    import threading
     from flask import Flask
 
     app_web = Flask(__name__)
@@ -359,5 +359,13 @@ if __name__ == "__main__":
         port = int(os.getenv("PORT", 10000))
         app_web.run(host="0.0.0.0", port=port)
 
-    Thread(target=run_flask).start()
-    asyncio.run(main())
+    # Flask em thread separada
+    threading.Thread(target=run_flask, daemon=True).start()
+
+    # Executa o bot no mesmo loop de forma segura
+    try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(main())
