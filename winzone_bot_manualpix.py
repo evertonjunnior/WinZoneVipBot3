@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # winzone_bot_manualpix.py
-# WinZoneVipBot3 — versão Render estável (Flask + Telegram Bot 20.x + APScheduler)
+# WinZoneVipBot3 — versão final e estável para Render
 
 import os
 import logging
 import sqlite3
 import threading
+import asyncio
 from datetime import datetime, timedelta, date
 from flask import Flask
 from telegram import Update
@@ -18,7 +19,6 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.background import BackgroundScheduler
 import holidays
-import asyncio
 
 # ----------------------------
 # CONFIGURAÇÕES
@@ -84,22 +84,18 @@ def registrar_assinante(conn, user_id, username, nome):
     """, (user_id, username, nome, hoje.isoformat(), expiracao.isoformat()))
     conn.commit()
 
-def is_assinante_ativo(conn, user_id):
-    cur = conn.cursor()
-    cur.execute("SELECT data_expiracao FROM assinantes WHERE user_id = ?", (user_id,))
-    row = cur.fetchone()
-    if not row:
-        return False
-    data_exp = datetime.fromisoformat(row[0])
-    return data_exp > datetime.now()
-
 # ----------------------------
 # AGENDADOR
 # ----------------------------
 scheduler = BackgroundScheduler()
 
-def is_business_day(d: date):
-    return d.weekday() < 5 and d not in BR_HOLIDAYS
+def iniciar_scheduler():
+    """Evita erro 'SchedulerAlreadyRunningError'."""
+    if not scheduler.running:
+        scheduler.start()
+        logging.info("✅ Scheduler iniciado com sucesso.")
+    else:
+        logging.info("⚙️ Scheduler já estava em execução, ignorando novo start().")
 
 # ----------------------------
 # HANDLERS DO BOT
@@ -176,7 +172,7 @@ async def confirmar_pagamento(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"✅ Pagamento confirmado e acesso liberado para {user_id}.")
 
 # ----------------------------
-# FUNÇÃO PRINCIPAL DO BOT
+# BOT PRINCIPAL
 # ----------------------------
 async def iniciar_bot():
     print("🚀 Iniciando WinZoneVipBot3...")
@@ -189,7 +185,10 @@ async def iniciar_bot():
     app.add_handler(CommandHandler("confirm", confirmar_pagamento))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.ALL, receber_comprovante))
 
-    await app.run_polling(close_loop=False)
+    iniciar_scheduler()  # garante que só será iniciado 1 vez
+
+    print("✅ Bot rodando e aguardando comandos...")
+    await app.run_polling(stop_signals=None, close_loop=False)
 
 # ----------------------------
 # FLASK KEEP-ALIVE (Render)
@@ -205,11 +204,10 @@ def iniciar_flask():
     app_web.run(host="0.0.0.0", port=port)
 
 # ----------------------------
-# EXECUÇÃO PRINCIPAL
+# EXECUÇÃO FINAL
 # ----------------------------
 if __name__ == "__main__":
-    # Executa o Flask em uma thread separada
     threading.Thread(target=iniciar_flask, daemon=True).start()
-
-    # Executa o bot de forma assíncrona
-    asyncio.run(iniciar_bot())
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(iniciar_bot())
