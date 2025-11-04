@@ -2,64 +2,59 @@ import asyncio
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 
-logging.basicConfig(level=logging.INFO)
+# --- LOGS ---
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# --- Variáveis de configuração ---
-BOT_TOKEN = "SEU_TOKEN_AQUI"  # troque pelo seu
+# --- CONFIG ---
+BOT_TOKEN = "COLE_SEU_TOKEN_AQUI"
 OWNER_ID = 1722782714
 
-# --- Funções do bot ---
+# --- COMANDOS BÁSICOS ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚀 Bot ativo e rodando perfeitamente no Render!")
+    await update.message.reply_text("🚀 WinZoneVipBot3 está ativo e rodando no Render!")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Comandos disponíveis:\n/start - Inicia o bot\n/help - Mostra ajuda")
+    await update.message.reply_text("Comandos disponíveis:\n/start - Inicia o bot\n/help - Mostra esta mensagem")
 
-# --- Scheduler (agendador de tarefas) ---
-scheduler = AsyncIOScheduler()
+# --- AGENDADOR ---
+scheduler = BackgroundScheduler()
 
-def exemplo_de_tarefa():
-    logging.info("⏰ Executando tarefa agendada automaticamente!")
+def tarefa_periodica():
+    logging.info("⏰ Executando tarefa periódica de teste...")
 
 def iniciar_scheduler():
     if not scheduler.running:
-        scheduler.add_job(exemplo_de_tarefa, "interval", minutes=1)
+        scheduler.add_job(tarefa_periodica, "interval", minutes=1)
         scheduler.start()
         logging.info("✅ Scheduler iniciado com sucesso.")
 
-# --- Função principal ---
+# --- LOOP PRINCIPAL ---
 async def main():
     logging.info("🚀 Iniciando WinZoneVipBot3...")
 
     app = Application.builder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
 
     iniciar_scheduler()
-
     logging.info("✅ Bot rodando e aguardando comandos...")
 
+    # Mantém o bot vivo para sempre no Render
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
-    # Mantém o bot ativo
-    await asyncio.Event().wait()
+    while True:
+        await asyncio.sleep(60)
 
-# --- Execução ---
+# --- EXECUÇÃO ---
 if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        # Se o Render já estiver com um loop ativo, usa esse loop
-        if "already running" in str(e).lower():
-            logging.warning("⚠️ Loop já em execução — ajustando para modo compatível com Render.")
-            loop = asyncio.get_event_loop()
-            loop.create_task(main())
-            loop.run_forever()
-        else:
-            raise
-
-
+        loop.run_until_complete(main())
+    except KeyboardInterrupt:
+        logging.warning("🛑 Bot encerrado manualmente.")
+    finally:
+        loop.close()
