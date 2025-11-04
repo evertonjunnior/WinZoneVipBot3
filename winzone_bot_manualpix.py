@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-# winzone_bot_manualpix.py
-# Versão mínima, estável e compatível com Render (modo background)
+# winzone_bot_manualpix.py — versão estável Render / Telegram Bot API 20.x
 
 import os
 import logging
@@ -17,22 +16,15 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# ----------------------------
-# CONFIGURAÇÕES DO BOT
-# ----------------------------
+# 🔧 Configurações
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", "1722782714"))
 PIX_KEY = os.getenv("PIX_KEY", "e016b584-d2c3-4852-a752-eab63add11a7")
 DB_PATH = "database.db"
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# ----------------------------
-# BANCO DE DADOS
-# ----------------------------
+# 🧩 Banco de Dados
 def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
@@ -48,9 +40,7 @@ def init_db():
     conn.commit()
     return conn
 
-# ----------------------------
-# FUNÇÕES DO BOT
-# ----------------------------
+# 🧠 Funções do Bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "💹 *Bem-vindo à WinZone | Sala de Sinais VIP 🚀*\n\n"
@@ -105,9 +95,7 @@ async def painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# ----------------------------
-# FUNÇÃO PRINCIPAL
-# ----------------------------
+# 🚀 Execução
 async def main():
     print("🚀 Iniciando WinZoneVipBot3...")
     conn = init_db()
@@ -125,8 +113,5 @@ async def main():
     print("✅ Bot rodando e aguardando comandos...")
     await app.run_polling()
 
-# ----------------------------
-# EXECUÇÃO
-# ----------------------------
 if __name__ == "__main__":
     asyncio.run(main())
