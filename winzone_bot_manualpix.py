@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# winzone_bot_manualpix.py — versão estável Render / Telegram Bot API 20.x
+# WinZoneVipBot3 — versão estável e compatível com Render (sem Flask)
 
 import os
 import logging
@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# 🔧 Configurações
+# Configurações
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = int(os.getenv("OWNER_ID", "1722782714"))
 PIX_KEY = os.getenv("PIX_KEY", "e016b584-d2c3-4852-a752-eab63add11a7")
@@ -24,7 +24,7 @@ DB_PATH = "database.db"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# 🧩 Banco de Dados
+# Banco de Dados
 def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
@@ -40,16 +40,14 @@ def init_db():
     conn.commit()
     return conn
 
-# 🧠 Funções do Bot
+# Comandos
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "💹 *Bem-vindo à WinZone | Sala de Sinais VIP 🚀*\n\n"
         "Para acessar nossas listas exclusivas, realize a assinatura mensal de *R$30,00*.\n\n"
-        "💰 *Pagamento via Pix*\n"
-        f"Chave aleatória:\n`{PIX_KEY}`\n\n"
-        "Após o pagamento, envie o comprovante aqui (imagem ou PDF).\n"
-        "Assim que confirmado, você receberá o acesso VIP.\n\n"
-        "⚠️ O acesso é válido por 30 dias."
+        f"💰 *Chave Pix:* `{PIX_KEY}`\n\n"
+        "Após o pagamento, envie o comprovante (imagem ou PDF) aqui mesmo.\n"
+        "Assim que confirmado, seu acesso será liberado por 30 dias."
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
@@ -72,7 +70,7 @@ async def receber_comprovante(update: Update, context: ContextTypes.DEFAULT_TYPE
     conn.commit()
 
     await update.message.reply_text(
-        f"✅ Pagamento registrado!\nSeu acesso está ativo até *{expiracao.strftime('%d/%m/%Y')}*.",
+        f"✅ Pagamento confirmado!\nSeu acesso expira em *{expiracao.strftime('%d/%m/%Y')}*.",
         parse_mode="Markdown"
     )
 
@@ -90,12 +88,11 @@ async def painel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "📊 *Painel WinZone*\n\n"
         f"👥 Assinantes ativos: {total}\n"
-        f"💸 Receita estimada: R${receita},00\n"
-        "🚀 Tudo funcionando perfeitamente!"
+        f"💸 Receita estimada: R${receita},00"
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# 🚀 Execução
+# Execução
 async def main():
     print("🚀 Iniciando WinZoneVipBot3...")
     conn = init_db()
@@ -114,12 +111,9 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
     try:
-        loop.run_until_complete(main())
+        asyncio.run(main())
     except RuntimeError:
-        # Se já houver loop rodando (como no Render), executa direto
+        loop = asyncio.get_event_loop()
         loop.create_task(main())
         loop.run_forever()
-
-
