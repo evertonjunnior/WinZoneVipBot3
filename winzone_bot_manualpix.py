@@ -114,4 +114,12 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    try:
+        loop.run_until_complete(main())
+    except RuntimeError:
+        # Se já houver loop rodando (como no Render), executa direto
+        loop.create_task(main())
+        loop.run_forever()
+
+
