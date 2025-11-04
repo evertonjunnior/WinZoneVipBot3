@@ -1,24 +1,31 @@
+import os
 import asyncio
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# --- LOGS ---
+# --- Configuração de logs ---
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# --- CONFIG ---
-BOT_TOKEN = "COLE_SEU_TOKEN_AQUI"
-OWNER_ID = 1722782714
+# --- Lendo variáveis do ambiente ---
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = os.getenv("OWNER_ID")
+PIX_KEY = os.getenv("PIX_KEY")
 
-# --- COMANDOS BÁSICOS ---
+if not BOT_TOKEN:
+    raise ValueError("❌ BOT_TOKEN não encontrado nas variáveis de ambiente!")
+if not OWNER_ID:
+    raise ValueError("❌ OWNER_ID não encontrado nas variáveis de ambiente!")
+
+# --- Comandos básicos ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🚀 WinZoneVipBot3 está ativo e rodando no Render!")
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Comandos disponíveis:\n/start - Inicia o bot\n/help - Mostra esta mensagem")
 
-# --- AGENDADOR ---
+# --- Agendador de tarefas ---
 scheduler = BackgroundScheduler()
 
 def tarefa_periodica():
@@ -30,7 +37,7 @@ def iniciar_scheduler():
         scheduler.start()
         logging.info("✅ Scheduler iniciado com sucesso.")
 
-# --- LOOP PRINCIPAL ---
+# --- Função principal ---
 async def main():
     logging.info("🚀 Iniciando WinZoneVipBot3...")
 
@@ -41,14 +48,14 @@ async def main():
     iniciar_scheduler()
     logging.info("✅ Bot rodando e aguardando comandos...")
 
-    # Mantém o bot vivo para sempre no Render
+    # Mantém o bot ativo continuamente
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
     while True:
         await asyncio.sleep(60)
 
-# --- EXECUÇÃO ---
+# --- Execução ---
 if __name__ == "__main__":
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
